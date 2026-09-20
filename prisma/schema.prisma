@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum CarModelCategory {
+  MPV
+  SUV
+  SEDAN
+  HATCHBACK
+  EV
+
+  @@map("car_model_category")
+}
+
+enum CarModelTransmission {
+  AUTOMATIC
+  MANUAL
+
+  @@map("car_model_transmission")
+}
+
+enum CarModelFuelType {
+  GASOLINE
+  DIESEL
+  HYBRID
+  ELECTRIC
+
+  @@map("car_model_fuel_type")
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  MAINTENANCE
+  INACTIVE
+
+  @@map("vehicle_status")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+
+  @@map("booking_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  phone        String
+  role         UserRole  @default(CUSTOMER)
+  avatarUrl    String?   @map("avatar_url")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  bookings     Booking[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Branch {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  address   String
+  city      String
+
+  latitude  Decimal  @db.Decimal(65, 30)
+
+  // Existing database column contains the typo `longtide`.
+  // Keep it mapped until a dedicated migration renames the DB column.
+  longitude Decimal @map("longtide") @db.Decimal(65, 30)
+
+  isActive  Boolean  @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vehicles        Vehicle[]
+  pickupBookings  Booking[] @relation("BookingPickupBranch")
+  dropoffBookings Booking[] @relation("BookingDropoffBranch")
+
+  @@index([city])
+  @@index([isActive])
+  @@map("branches")
+}
+
+model CarModel {
+  id           String                @id @default(uuid()) @db.Uuid
+  brand        String
+  model        String
+  year         Int
+  category     CarModelCategory
+  seats        Int
+  transmission CarModelTransmission
+  fuelType     CarModelFuelType      @map("fuel_type")
+  pricePerDay  Int                   @map("price_per_day")
+  isActive     Boolean               @default(true) @map("is_active")
+
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+
+  vehicles     Vehicle[]
+  images       CarModelImage[]
+
+  @@index([brand, model])
+  @@index([category])
+  @@index([isActive])
+  @@map("car_models")
+}
+
+model CarModelImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  carModelId String   @map("car_model_id") @db.Uuid
+  imageUrl   String   @map("image_url")
+  storageKey String   @map("storage_key")
+  sortOrder  Int      @map("sort_order")
+  isPrimary  Boolean  @map("is_primary")
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  carModel   CarModel @relation(fields: [carModelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([carModelId])
+  @@map("card_model_images")
+}
+
+model Vehicle {
+  id               String        @id @default(uuid()) @db.Uuid
+  carModelId       String        @map("car_model_id") @db.Uuid
+  licensePlate     String        @unique @map("license_plate")
+  vin              String        @unique
+  currentMileageKm Int           @default(0) @map("current_mileage_km")
+  status           VehicleStatus @default(AVAILABLE)
+  currentBranchId  String        @map("current_branch_id") @db.Uuid
+
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  carModel         CarModel      @relation(fields: [carModelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currentBranch    Branch        @relation(fields: [currentBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bookings         Booking[]
+
+  @@index([carModelId])
+  @@index([currentBranchId])
+  @@index([status])
+  @@map("vehicles")
+}
+
+model Booking {
+  id              String        @id @default(uuid()) @db.Uuid
+  customerId      String        @map("customer_id") @db.Uuid
+  vehicleId       String        @map("vehicle_id") @db.Uuid
+  pickupBranchId  String        @map("pickup_branch_id") @db.Uuid
+  dropoffBranchId String        @map("dropoff_branch_id") @db.Uuid
+
+  pickupAt        DateTime      @map("pickup_at")
+  dropoffAt       DateTime      @map("dropoff_at")
+
+  status          BookingStatus @default(PENDING)
+
+  pricePerDay     Int           @map("price_per_day")
+  subtotal        Int
+  discount        Int           @default(0)
+  totalAmount     Int           @map("total_amount")
+
+  notes           String?
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  customer        User          @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  vehicle         Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  pickupBranch    Branch        @relation("BookingPickupBranch", fields: [pickupBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  dropoffBranch   Branch        @relation("BookingDropoffBranch", fields: [dropoffBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([pickupBranchId])
+  @@index([dropoffBranchId])
+  @@index([status])
+  @@index([pickupAt, dropoffAt])
+  @@map("bookings")
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.Uuid
+  bookingId     String        @map("booking_id") @db.Uuid
+  amount        Int
+  provider      String
+  transactionId String        @unique @map("transaction_id")
+  status        PaymentStatus @default(PENDING)
+
+  paidAt        DateTime?     @map("paidAt")
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("payments")
+}
