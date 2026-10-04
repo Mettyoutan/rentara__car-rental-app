@@ -126,7 +126,7 @@ model CarModel {
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime              @updatedAt @map("updated_at")
 
-  vehicles     Vehicle[]
+  vehicles     Vehicle[] 
   images       CarModelImage[]
 
   @@index([brand, model])
@@ -146,7 +146,7 @@ model CarModelImage {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  carModel   CarModel @relation(fields: [carModelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  carModel   CarModel @relation(fields: [carModelId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([carModelId])
   @@map("card_model_images")
@@ -159,15 +159,15 @@ model Vehicle {
   vin              String        @unique
   currentMileageKm Int           @default(0) @map("current_mileage_km")
   status           VehicleStatus @default(AVAILABLE)
-  currentBranchId  String        @map("current_branch_id") @db.Uuid
+  currentBranchId  String       @map("current_branch_id") @db.Uuid
 
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  carModel         CarModel      @relation(fields: [carModelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  carModel         CarModel      @relation(fields: [carModelId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   currentBranch    Branch        @relation(fields: [currentBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bookings         Booking[]
-
+  
   @@index([carModelId])
   @@index([currentBranchId])
   @@index([status])
@@ -196,10 +196,10 @@ model Booking {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  customer        User          @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  vehicle         Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  pickupBranch    Branch        @relation("BookingPickupBranch", fields: [pickupBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  dropoffBranch   Branch        @relation("BookingDropoffBranch", fields: [dropoffBranchId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customer        User          @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  vehicle         Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  pickupBranch    Branch        @relation("BookingPickupBranch", fields: [pickupBranchId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  dropoffBranch   Branch        @relation("BookingDropoffBranch", fields: [dropoffBranchId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   payments        Payment[]
 
@@ -225,7 +225,7 @@ model Payment {
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([bookingId])
   @@index([status])
