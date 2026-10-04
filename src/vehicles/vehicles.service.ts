@@ -8,7 +8,7 @@ import {
   CarModelFuelType,
   CarModelTransmission,
 } from 'generated/prisma/client';
-import { UpdateVehicleDto } from './dtos/requests/update-vehicle.dto';
+import { UpdateVehicleDto } from './dtos/requests/update-car-model.dto';
 import { PrismaClientKnownRequestError } from 'generated/prisma/internal/prismaNamespace';
 import { CreateVehicleDto } from './dtos/requests/create-car-model.dto';
 

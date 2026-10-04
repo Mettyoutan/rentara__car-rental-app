@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { IsUUID } from 'class-validator';
 import { get } from 'http';
-import { VehicleIdParamDto } from './dtos/requests/vehicle-id-param.dto';
+import { VehicleIdParamDto } from './dtos/requests/car-model-id-param.dto';
 import { GetVehiclesQueryDto } from './dtos/requests/get-car-model-query.dto';
 import { VehiclesService } from './vehicles.service';
 
