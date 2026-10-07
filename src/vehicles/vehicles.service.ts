@@ -1,187 +1,198 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from 'src/database/database.service';
-import { GetVehiclesQueryDto } from './dtos/requests/get-car-model-query.dto';
-import { VehicleItemListDto } from './dtos/responses/vehicle-item-list.dto';
-import { VehicleListResponseDto } from './dtos/responses/vehicle-response.dto';
 import {
-  CarModelCategory,
-  CarModelFuelType,
-  CarModelTransmission,
-} from 'generated/prisma/client';
-import { UpdateVehicleDto } from './dtos/requests/update-car-model.dto';
-import { PrismaClientKnownRequestError } from 'generated/prisma/internal/prismaNamespace';
-import { CreateVehicleDto } from './dtos/requests/create-car-model.dto';
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { DatabaseService } from 'src/database/database.service';
+import { VehicleQueryDto } from './dtos/requests/vehicle-query.dto';
+import { CreateVehicleDto } from './dtos/requests/create-vehicle.dto';
+import { UpdateVehicleDto } from './dtos/requests/update-vehicle.dto';
+import {
+  VehiclePaginationDto,
+  VehicleResponseDto,
+} from './dtos/responses/vehicle-response.dto';
+import { VehicleStatus } from 'generated/prisma/enums';
+import { Decimal } from 'generated/prisma/internal/prismaNamespace';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
 
 @Injectable()
 export class VehiclesService {
   constructor(private readonly db: DatabaseService) {}
 
-  private toVehicleItemListDto(item: {
-    id: string;
-    brand: string;
-    model: string;
-    year: number;
-    category: CarModelCategory;
-    seats: number;
-    transmission: CarModelTransmission;
-    fuelType: CarModelFuelType;
-    pricePerDay: number;
-    images: {
-      imageUrl: string;
-    }[];
-  }): VehicleItemListDto {
-    const { images, ...other } = item;
+  private toResponse(
+    vehicle: {
+      currentBranch: {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        address: string;
+        city: string;
+        latitude: Decimal;
+        longitude: Decimal;
+        isActive: boolean;
+      };
+    } & {
+      id: string;
+      status: VehicleStatus;
+      currentBranchId: string;
+      carModelId: string;
+      licensePlate: string;
+      vin: string;
+      currentMileageKm: number;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+  ): VehicleResponseDto {
     return {
-      ...other,
-      primaryImageUrl: images.at(0)?.imageUrl ?? null,
+      id: vehicle.id,
+      licensePlate: vehicle.licensePlate,
+      vin: vehicle.vin,
+      currentMileageKm: vehicle.currentMileageKm,
+      status: vehicle.status,
+      currentBranch: { ...vehicle.currentBranch },
+      createdAt: vehicle.createdAt,
+      updatedAt: vehicle.updatedAt,
     };
   }
 
-  async search(query: GetVehiclesQueryDto): Promise<VehicleListResponseDto> {
-    const skip = (query.page - 1) * query.limit;
+  async search(
+    carModelId: string,
+    query: VehicleQueryDto,
+  ): Promise<VehiclePaginationDto> {
+    const { search, status, currentBranchId, page, limit } = query;
 
-    const [items, total] = await Promise.all([
-      this.db.carModel.findMany({
-        select: {
-          id: true,
-          model: true,
-          brand: true,
-          category: true,
-          fuelType: true,
-          pricePerDay: true,
-          transmission: true,
-          seats: true,
-          year: true,
-          images: {
-            select: { imageUrl: true },
-            where: {
-              isPrimary: true,
-            },
-          },
-        },
+    const skip = (page - 1) * limit;
+
+    const [vehicles, total] = await this.db.$transaction([
+      this.db.vehicle.findMany({
+        take: limit,
         skip,
-        take: query.limit,
         where: {
-          fuelType: query.fuelType,
-          category: query.category,
-          seats: { gte: query.minSeats, lte: query.maxSeats },
-          transmission: query.transmission,
-          pricePerDay: { gte: query.minPrice, lte: query.maxPrice },
+          // Pakai CarModelId
+          carModelId,
+          // Search dihubungkan dengan licensePlate atau vin
+          OR: [
+            { licensePlate: { contains: search, mode: 'insensitive' } },
+            { vin: { contains: search, mode: 'insensitive' } },
+          ],
+          status,
+          currentBranchId,
         },
+        include: { currentBranch: true },
       }),
-      this.db.carModel.count(),
+      // Count all
+      this.db.vehicle.count(),
     ]);
 
-    const dtos = items.map((item) => this.toVehicleItemListDto(item));
+    const responses = vehicles.map((vehicle) => this.toResponse(vehicle));
 
     return {
-      items: dtos,
+      items: responses,
       meta: {
-        page: query.page,
-        limit: query.limit,
+        page,
+        limit,
         total,
-        totalPages: Math.ceil(total / query.limit),
+        totalPages: Math.ceil(total / limit),
       },
     };
   }
 
-  async getById(id: string): Promise<VehicleItemListDto> {
-    const item = await this.db.carModel.findUnique({
-      select: {
-        id: true,
-        model: true,
-        brand: true,
-        category: true,
-        fuelType: true,
-        pricePerDay: true,
-        seats: true,
-        transmission: true,
-        year: true,
-        images: {
-          select: { imageUrl: true },
-          where: { isPrimary: true },
-        },
-      },
+  async findById(
+    carModelId: string,
+    vehicleId: string,
+  ): Promise<VehicleResponseDto> {
+    const vehicle = await this.db.vehicle.findUnique({
       where: {
-        id,
+        id: vehicleId,
+        carModelId,
       },
+      include: { currentBranch: true },
     });
 
-    if (!item) {
-      throw new NotFoundException('Item not found.');
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found.');
     }
 
-    return this.toVehicleItemListDto(item);
+    return this.toResponse(vehicle);
   }
 
-  /**
-   * * Membuat carModel beserta images nya
-   * @param createVehicleDto
-   */
-  async create(createVehicleDto: CreateVehicleDto) {
-    await this.db.$transaction(async (tx) => {
-      await tx.carModel.create({
-        select: {
-          id: true,
-          model: true,
-          brand: true,
-          category: true,
-          fuelType: true,
-          pricePerDay: true,
-          seats: true,
-          transmission: true,
-          year: true,
-          images: {
-            select: { imageUrl: true },
-            where: { isPrimary: true },
-          },
-        },
-        data: createVehicleDto,
-      });
-    });
-  }
-
-  async update(id: string, updateVehicleDto: UpdateVehicleDto) {
+  async create(
+    carModelId: string,
+    dto: CreateVehicleDto,
+  ): Promise<VehicleResponseDto> {
     try {
-      const item = await this.db.carModel.update({
-        select: {
-          id: true,
-          model: true,
-          brand: true,
-          category: true,
-          fuelType: true,
-          pricePerDay: true,
-          seats: true,
-          transmission: true,
-          year: true,
-          images: {
-            select: { imageUrl: true },
-            where: { isPrimary: true },
-          },
+      const vehicle = await this.db.vehicle.create({
+        data: {
+          carModelId,
+          ...dto,
         },
-        where: {
-          id,
-        },
-        data: updateVehicleDto,
+        include: { currentBranch: true },
       });
 
-      return this.toVehicleItemListDto(item);
+      return this.toResponse(vehicle);
     } catch (e) {
-      if (e instanceof PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException('Vehicle not found');
+      if (e instanceof PrismaClientKnownRequestError) {
+        if (e.code === 'P2022') {
+          throw new ConflictException('License plate or VIN already exists.');
+        }
+
+        if (e.code === 'P2023') {
+          throw new BadRequestException('Invalid car model or branch.');
+        }
       }
+
+      throw new InternalServerErrorException(
+        'Something went wrong while create vehicle.',
+      );
     }
   }
 
-  async delete(id: string): Promise<void> {
+  async update(
+    carModelId: string,
+    vehicleId: string,
+    dto: UpdateVehicleDto,
+  ): Promise<VehicleResponseDto> {
     try {
-      await this.db.carModel.delete({ where: { id } });
+      const vehicle = await this.db.vehicle.update({
+        where: { id: vehicleId, carModelId },
+        data: dto,
+
+        include: { currentBranch: true },
+      });
+
+      return this.toResponse(vehicle);
+    } catch (e) {
+      if (e instanceof PrismaClientKnownRequestError) {
+        if (e.code === 'P2025') {
+          throw new NotFoundException('Vehicle not found.');
+        }
+        if (e.code === 'P2023') {
+          throw new BadRequestException('Invalid branch.');
+        }
+      }
+
+      throw new InternalServerErrorException(
+        'Something went wrong while update vehicle',
+      );
+    }
+  }
+
+  async remove(carModelId: string, vehicleId: string): Promise<void> {
+    try {
+      await this.db.vehicle.delete({
+        where: { id: vehicleId, carModelId },
+      });
     } catch (e) {
       if (e instanceof PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException('Vehicle not found');
+        throw new NotFoundException('Vehicle not found.');
       }
-    }
 
-    return;
+      throw new InternalServerErrorException(
+        'Something went wrong while remove vehicle.',
+      );
+    }
   }
 }

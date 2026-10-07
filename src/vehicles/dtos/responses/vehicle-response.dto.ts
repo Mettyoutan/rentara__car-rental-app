@@ -1,12 +1,28 @@
-import { VehicleItemListDto } from './vehicle-item-list.dto';
+import { VehicleStatus } from 'generated/prisma/enums';
 
-export type VehicleListResponseDto = {
-  items: VehicleItemListDto[];
+export class VehicleBranchSummaryDto {
+  id!: string;
+  name!: string;
+  city!: string;
+}
 
-  meta: {
+export class VehicleResponseDto {
+  id!: string;
+  licensePlate!: string;
+  vin!: string;
+  currentMileageKm!: number;
+  status!: VehicleStatus;
+  currentBranch!: VehicleBranchSummaryDto;
+  createdAt!: Date;
+  updatedAt!: Date;
+}
+
+export class VehiclePaginationDto {
+  items!: VehicleResponseDto[];
+  meta!: {
     page: number;
     limit: number;
     total: number;
     totalPages: number;
   };
-};
+}

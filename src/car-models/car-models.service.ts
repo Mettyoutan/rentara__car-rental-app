@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -133,10 +135,20 @@ export class CarModelsService {
 
   async create(data: CreateCarModelDto): Promise<CarModelResponseDto> {
     const item = await this.db.$transaction(async (tx) => {
-      return await tx.carModel.create({
-        include: { images: true },
-        data,
-      });
+      try {
+        return await tx.carModel.create({
+          include: { images: true },
+          data,
+        });
+      } catch (e) {
+        if (e instanceof PrismaClientKnownRequestError && e.code === 'P2022') {
+          throw new ConflictException('Unique constraints error: ', e.message);
+        }
+
+        throw new InternalServerErrorException(
+          'Something went wrong while create car model.',
+        );
+      }
     });
 
     return item;
@@ -158,7 +170,7 @@ export class CarModelsService {
       return this.toResponse(item);
     } catch (e) {
       if (e instanceof PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException('Car moddel not found');
+        throw new NotFoundException('Car model not found');
       }
 
       throw new InternalServerErrorException(
